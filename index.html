@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ya está jugando — Campaña ludopatía juvenil</title>
+<meta name="description" content="Campaña de concientización sobre ludopatía juvenil. Tu hijo ya está jugando. ¿Lo sabés?">
+
+<!-- ===== Fuentes ===== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    background:#06070c;
+    color:#f3f3f0;
+    font-family:'Archivo',system-ui,sans-serif;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:#e11d2a; color:#fff; }
+  /* loader chip assembly */
+  @keyframes yjspin{ to{ transform:rotate(360deg); } }
+  @keyframes yjstack{ 0%{ transform:translateY(26px) scale(.6); opacity:0 } 55%{opacity:1} 100%{ transform:translateY(0) scale(1); opacity:1 } }
+  @keyframes yjbob{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-8px) } }
+  @keyframes yjscroll{ 0%{ transform:translateY(-60%); opacity:0 } 30%{opacity:1} 100%{ transform:translateY(120%); opacity:0 } }
+  @keyframes yjglow{ 0%,100%{ opacity:.5 } 50%{ opacity:1 } }
+  /* hovers (en el .dc.html original los resolvía el runtime vía style-hover) */
+  #yj-prev:hover, #yj-next:hover{ border-color:#e11d2a !important; color:#e11d2a !important; }
+  a[href^="tel"]:hover{ color:#e11d2a !important; }
+</style>
+
+<!-- CDN libs: Three.js (escena 3D) + Lenis (smooth-scroll). Toda la animación
+     scroll-driven se calcula en el render loop, sin dependencias extra. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+</head>
+<body>
+
+<!-- ===================== LOADER (las fichas armándose) ===================== -->
+<div id="yj-loader" style="position:fixed; inset:0; z-index:120; background:#06070c; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:34px;">
+  <div style="position:relative; width:80px; height:96px; display:flex; align-items:flex-end; justify-content:center;">
+    <div style="position:absolute; bottom:0; width:72px; height:18px; border-radius:50%; background:#11151f; box-shadow:0 0 0 3px #1b2130;"></div>
+    <div style="position:relative; width:64px; height:14px; border-radius:50%; background:#e11d2a; box-shadow:0 0 0 3px #fff; animation:yjstack .7s .0s both;"></div>
+    <div style="position:absolute; bottom:14px; width:64px; height:14px; border-radius:50%; background:#f3f3f0; box-shadow:0 0 0 3px #c9c9c4; animation:yjstack .7s .15s both;"></div>
+    <div style="position:absolute; bottom:28px; width:64px; height:14px; border-radius:50%; background:#16203a; box-shadow:0 0 0 3px #2b3a5e; animation:yjstack .7s .3s both;"></div>
+    <div style="position:absolute; bottom:42px; width:64px; height:14px; border-radius:50%; background:#e11d2a; box-shadow:0 0 0 3px #fff; animation:yjstack .7s .45s both;"></div>
+  </div>
+  <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+    <div style="font-family:'Anton'; font-size:15px; letter-spacing:.32em; text-transform:uppercase; color:#9aa0ad;">Ya está <span style="color:#e11d2a;">jugando</span></div>
+    <div style="width:190px; height:2px; background:#1b2130; overflow:hidden;">
+      <div id="yj-load-bar" style="width:0%; height:100%; background:#e11d2a;"></div>
+    </div>
+    <div id="yj-loader-pct" style="font-family:'Archivo'; font-size:11px; letter-spacing:.25em; color:#6b7280;">CARGANDO 0%</div>
+  </div>
+</div>
+
+<!-- ===================== WEBGL CANVAS (fijo, detrás de todo) ===================== -->
+<div style="position:fixed; inset:0; z-index:0; pointer-events:none;">
+  <canvas id="yj-canvas" style="display:block; width:100%; height:100%;"></canvas>
+</div>
+<!-- viñeta cinematográfica -->
+<div style="position:fixed; inset:0; z-index:1; pointer-events:none; background:radial-gradient(120% 90% at 50% 40%, rgba(6,7,12,0) 40%, rgba(6,7,12,.55) 78%, rgba(4,5,9,.92) 100%);"></div>
+
+<!-- barra de progreso de scroll -->
+<div style="position:fixed; top:0; left:0; right:0; height:3px; z-index:60; background:rgba(255,255,255,.05);">
+  <div id="yj-bar" style="height:100%; width:0%; background:#e11d2a;"></div>
+</div>
+
+<!-- ===================== CONTENIDO ===================== -->
+<main style="position:relative; z-index:2;">
+
+  <!-- ---------- HERO ---------- -->
+  <section id="yj-hero" data-screen-label="Hero" style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:64px 24px;">
+    <div style="font-family:'Archivo'; font-weight:600; font-size:12px; letter-spacing:.4em; text-transform:uppercase; color:#8c93a1; margin-bottom:30px;">Campaña de concientización · Ludopatía juvenil</div>
+    <h1 style="font-family:'Anton'; font-weight:400; line-height:.82; letter-spacing:-.01em; margin:0; -webkit-box-reflect:below 6px linear-gradient(transparent, transparent 56%, rgba(255,255,255,.10));">
+      <span style="display:block; font-size:clamp(58px,15vw,260px); color:#f4f4f1; text-shadow:0 1px 0 #b9bcc4, 0 2px 0 #8e929b, 0 4px 0 #5e626b, 0 8px 16px rgba(0,0,0,.55);">Ya está</span>
+      <span style="display:block; font-size:clamp(58px,15vw,260px); color:#e11d2a; text-shadow:0 1px 0 #8c0f17, 0 2px 0 #6f0c12, 0 4px 0 #4c080c, 0 10px 22px rgba(225,29,42,.35);">jugando</span>
+    </h1>
+    <p style="font-family:'Archivo'; font-weight:500; font-size:clamp(16px,2.4vw,24px); color:#cfd2d8; margin-top:38px; max-width:560px; text-wrap:balance;">Tu hijo ya está jugando. <span style="color:#fff; font-weight:700;">¿Lo sabés?</span></p>
+    <div style="position:absolute; bottom:34px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:10px;">
+      <span style="font-family:'Archivo'; font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:#6b7280;">Scrolleá</span>
+      <div style="position:relative; width:1px; height:46px; background:rgba(255,255,255,.12); overflow:hidden;">
+        <div style="position:absolute; left:0; top:0; width:1px; height:18px; background:#e11d2a; animation:yjscroll 1.8s ease-in-out infinite;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- 01 · EL PROBLEMA ---------- -->
+  <section id="yj-problema" data-screen-label="El problema" style="min-height:118vh; display:flex; flex-direction:column; justify-content:center; padding:120px 24px; max-width:1200px; margin:0 auto; width:100%;">
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:54px;">
+      <span style="font-family:'Anton'; font-size:14px; color:#e11d2a; letter-spacing:.1em;">01</span>
+      <span style="font-family:'Archivo'; font-weight:700; font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:#9aa0ad;">El problema</span>
+      <span style="flex:1; height:1px; background:rgba(255,255,255,.10);"></span>
+    </div>
+    <h2 style="font-family:'Anton'; font-weight:400; font-size:clamp(30px,5.4vw,68px); line-height:.98; letter-spacing:-.01em; color:#f4f4f1; max-width:14ch; margin-bottom:64px;">Las apuestas online ya entraron a la <span style="color:#e11d2a;">infancia.</span></h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:30px;">
+      <div class="yj-stat-card" style="border-top:2px solid rgba(255,255,255,.12); padding-top:22px;">
+        <div style="font-family:'Anton'; font-size:clamp(58px,8vw,104px); line-height:.9; color:#f4f4f1;"><span class="yj-stat" data-to="16" data-pre="" data-suf="%">0%</span></div>
+        <p style="font-family:'Archivo'; font-weight:500; font-size:15px; color:#aeb3bd; margin-top:14px; line-height:1.45;">de los jóvenes ya apuesta online.</p>
+      </div>
+      <div class="yj-stat-card" style="border-top:2px solid rgba(255,255,255,.12); padding-top:22px;">
+        <div style="font-family:'Anton'; font-size:clamp(58px,8vw,104px); line-height:.9; color:#e11d2a;"><span class="yj-stat" data-to="83" data-pre="" data-suf="%">0%</span></div>
+        <p style="font-family:'Archivo'; font-weight:500; font-size:15px; color:#aeb3bd; margin-top:14px; line-height:1.45;">lo hace desde el celular, en silencio.</p>
+      </div>
+      <div class="yj-stat-card" style="border-top:2px solid rgba(255,255,255,.12); padding-top:22px;">
+        <div style="font-family:'Anton'; font-size:clamp(58px,8vw,104px); line-height:.9; color:#f4f4f1;"><span class="yj-stat" data-to="27" data-pre="+" data-suf="%">+0%</span></div>
+        <p style="font-family:'Archivo'; font-weight:500; font-size:15px; color:#aeb3bd; margin-top:14px; line-height:1.45;">de consultas por ludopatía juvenil en 2025.</p>
+      </div>
+      <div class="yj-stat-card" style="border-top:2px solid rgba(225,29,42,.5); padding-top:22px;">
+        <div style="font-family:'Anton'; font-size:clamp(58px,8vw,104px); line-height:.9; color:#f4f4f1;"><span class="yj-stat" data-to="52" data-pre="" data-suf="%">0%</span></div>
+        <p style="font-family:'Archivo'; font-weight:500; font-size:15px; color:#aeb3bd; margin-top:14px; line-height:1.45;">de los padres cree que su hijo usa las pantallas de forma sana.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- 02 · EL DOBLE SENTIDO ---------- -->
+  <section id="yj-doble" data-screen-label="El doble sentido" style="min-height:150vh; position:relative;">
+    <div style="position:sticky; top:0; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px 24px; overflow:hidden;">
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:40px;">
+        <span style="font-family:'Anton'; font-size:14px; color:#e11d2a;">02</span>
+        <span style="font-family:'Archivo'; font-weight:700; font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:#9aa0ad;">El doble sentido</span>
+      </div>
+      <p style="font-family:'Archivo'; font-weight:500; font-size:clamp(15px,2.2vw,21px); color:#cfd2d8; margin-bottom:18px;">La misma palabra. Dos mundos distintos.</p>
+      <div style="position:relative; height:clamp(90px,20vw,260px); display:flex; align-items:center; justify-content:center; width:100%;">
+        <span id="yj-word-jugar" style="position:absolute; font-family:'Anton'; font-size:clamp(72px,19vw,320px); line-height:.8; color:#f4f4f1; letter-spacing:-.02em;">JUGAR</span>
+        <span id="yj-word-apostar" style="position:absolute; font-family:'Anton'; font-size:clamp(72px,19vw,320px); line-height:.8; color:#e11d2a; letter-spacing:-.02em; opacity:0; transform:scale(1.08);">APOSTAR</span>
+      </div>
+      <p style="font-family:'Archivo'; font-weight:500; font-size:clamp(15px,2.2vw,22px); color:#cfd2d8; margin-top:34px; max-width:640px; text-wrap:balance;">Para vos sigue siendo un juego de chicos. Para tu hijo, <span style="color:#fff; font-weight:700;">«jugar» ya puede significar apostar.</span></p>
+    </div>
+  </section>
+
+  <!-- ---------- 03 · LA CAMPAÑA / GALERÍA 3D ---------- -->
+  <section id="yj-galeria" data-screen-label="La campaña" style="min-height:170vh; position:relative;">
+    <div style="position:sticky; top:0; height:100vh; display:flex; flex-direction:column; padding:34px 24px 30px; overflow:hidden;">
+      <div style="display:flex; align-items:center; gap:16px;">
+        <span style="font-family:'Anton'; font-size:14px; color:#e11d2a;">03</span>
+        <span style="font-family:'Archivo'; font-weight:700; font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:#9aa0ad;">La campaña · 11 piezas</span>
+        <span style="flex:1; height:1px; background:rgba(255,255,255,.08);"></span>
+        <span style="font-family:'Archivo'; font-size:11px; letter-spacing:.06em; color:#6b7280;" class="yj-hide-mobile">Arrastrá para girar</span>
+      </div>
+
+      <!-- el carrusel 3D vive en el canvas; este panel se posa encima -->
+      <div style="flex:1; display:flex; align-items:flex-end; pointer-events:none;">
+        <div style="display:flex; align-items:flex-end; justify-content:space-between; width:100%; gap:24px; flex-wrap:wrap;">
+          <div style="pointer-events:auto; max-width:440px;">
+            <div style="display:flex; align-items:baseline; gap:14px;">
+              <span id="yj-pieza-num" style="font-family:'Anton'; font-size:clamp(34px,5vw,60px); color:#e11d2a; line-height:.8;">01</span>
+              <h3 id="yj-pieza-tit" style="font-family:'Anton'; font-weight:400; font-size:clamp(26px,4vw,52px); color:#f4f4f1; line-height:.92; letter-spacing:-.01em;">Pase de abordar</h3>
+            </div>
+            <div id="yj-pieza-fmt" style="font-family:'Archivo'; font-weight:700; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:#8c93a1; margin-top:14px;">Pieza de mano · vía pública aeroportuaria</div>
+            <p id="yj-pieza-desc" style="font-family:'Archivo'; font-weight:500; font-size:clamp(14px,1.7vw,17px); color:#cfd2d8; margin-top:10px; line-height:1.5; max-width:42ch;">El juego como un viaje sin retorno: ya tiene su pase de abordar.</p>
+          </div>
+          <div style="pointer-events:auto; display:flex; align-items:center; gap:14px;">
+            <button id="yj-prev" aria-label="Anterior" style="width:54px; height:54px; border-radius:50%; border:1px solid rgba(255,255,255,.18); background:rgba(13,16,24,.6); color:#f4f4f1; font-size:20px; cursor:pointer; backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center;">‹</button>
+            <span id="yj-pieza-index" style="font-family:'Archivo'; font-weight:700; font-size:12px; letter-spacing:.1em; color:#9aa0ad; min-width:54px; text-align:center;">01 / 11</span>
+            <button id="yj-next" aria-label="Siguiente" style="width:54px; height:54px; border-radius:50%; border:1px solid rgba(255,255,255,.18); background:rgba(13,16,24,.6); color:#f4f4f1; font-size:20px; cursor:pointer; backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center;">›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- 04 · QUÉ PODÉS HACER ---------- -->
+  <section id="yj-accion" data-screen-label="Qué podés hacer" style="min-height:100vh; padding:120px 24px; max-width:1200px; margin:0 auto; width:100%;">
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:50px;">
+      <span style="font-family:'Anton'; font-size:14px; color:#e11d2a;">04</span>
+      <span style="font-family:'Archivo'; font-weight:700; font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:#9aa0ad;">Qué podés hacer</span>
+      <span style="flex:1; height:1px; background:rgba(255,255,255,.10);"></span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:54px;">
+      <div>
+        <h3 style="font-family:'Anton'; font-weight:400; font-size:clamp(26px,3.6vw,46px); color:#f4f4f1; line-height:.95; margin-bottom:26px;">Señales de <span style="color:#e11d2a;">alerta</span></h3>
+        <ul style="list-style:none; display:flex; flex-direction:column; gap:2px;">
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="color:#e11d2a; font-family:'Anton'; font-size:14px;">●</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Pide plata prestada o le falta dinero sin explicación.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="color:#e11d2a; font-family:'Anton'; font-size:14px;">●</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Cambios de humor: irritable, ansioso, encerrado.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="color:#e11d2a; font-family:'Anton'; font-size:14px;">●</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Usa el celular a escondidas, sobre todo de noche.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="color:#e11d2a; font-family:'Anton'; font-size:14px;">●</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Bajó su rendimiento escolar o deportivo.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="color:#e11d2a; font-family:'Anton'; font-size:14px;">●</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Habla de cuotas, premios, «movidas» o apuestas.</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="font-family:'Anton'; font-weight:400; font-size:clamp(26px,3.6vw,46px); color:#f4f4f1; line-height:.95; margin-bottom:26px;">Hablá <span style="color:#e11d2a;">a tiempo</span></h3>
+        <ul style="list-style:none; display:flex; flex-direction:column; gap:2px;">
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="font-family:'Anton'; font-size:14px; color:#7c828d;">01</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Hablá en familia, sin juzgar ni dramatizar.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="font-family:'Anton'; font-size:14px; color:#7c828d;">02</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Activá controles parentales y límites de gasto.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="font-family:'Anton'; font-size:14px; color:#7c828d;">03</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Conocé las apps y los juegos que usa.</span></li>
+          <li class="yj-alert" style="display:flex; gap:16px; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.08);"><span style="font-family:'Anton'; font-size:14px; color:#7c828d;">04</span><span style="font-family:'Archivo'; font-weight:500; font-size:16px; color:#d6d9df;">Pedí ayuda profesional sin esperar a que sea tarde.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CTA / línea de ayuda -->
+    <div style="margin-top:80px; border:1px solid rgba(225,29,42,.35); background:linear-gradient(180deg, rgba(225,29,42,.08), rgba(225,29,42,.02)); padding:clamp(28px,5vw,56px); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:30px;">
+      <div>
+        <div style="font-family:'Archivo'; font-weight:700; font-size:12px; letter-spacing:.28em; text-transform:uppercase; color:#e11d2a; margin-bottom:14px;">Si lo necesitás, pedí ayuda</div>
+        <div style="font-family:'Archivo'; font-weight:600; font-size:clamp(16px,2.2vw,22px); color:#e8eaee;">Línea de orientación al jugador problemático</div>
+      </div>
+      <a href="tel:08004444000" style="font-family:'Anton'; font-size:clamp(38px,6vw,76px); color:#f4f4f1; text-decoration:none; letter-spacing:.01em; line-height:.9;">0800-444-4000</a>
+    </div>
+  </section>
+
+  <!-- ---------- CRÉDITOS ---------- -->
+  <footer style="min-height:64vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:90px 24px; border-top:1px solid rgba(255,255,255,.07);">
+    <div style="font-family:'Anton'; font-size:clamp(30px,6vw,80px); line-height:.85; color:#f4f4f1;">Ya está <span style="color:#e11d2a;">jugando</span></div>
+    <p style="font-family:'Archivo'; font-weight:500; font-size:14px; letter-spacing:.05em; color:#8c93a1; margin-top:30px;">Campaña de concientización — Ludopatía juvenil · Trabajo práctico</p>
+    <p style="font-family:'Archivo'; font-weight:500; font-size:12px; color:#5b606b; margin-top:10px;">El juego compulsivo es perjudicial para la salud. +18.</p>
+  </footer>
+</main>
+
+<script>
+/* =================================================================
+   "Ya está jugando" — experiencia 3D scroll-driven (Three.js + Lenis)
+   -----------------------------------------------------------------
+   Implementación autónoma del componente Claude Design "Ya esta jugando.dc.html".
+   Se reemplazó el runtime de Claude Design (DCLogic / support.js) por un shim
+   mínimo: una clase base que guarda `props` y dispara el ciclo de vida al cargar.
+
+   PARA EDITAR:
+   · Textos de las secciones → directamente en el HTML de arriba.
+   · Las 11 imágenes de la campaña → array PIEZAS (más abajo).
+     Colocá los archivos en /piezas/pieza-01.png … pieza-11.png
+     manteniendo el nombre, o cambiá el campo "src".
+   · Color de acento 3D / densidad / reflejos → objeto PROPS (abajo de todo).
+   ================================================================= */
+
+/* ---- shim que reemplaza a DCLogic del runtime de Claude Design ---- */
+class DCLogic {
+  constructor(props){ this.props = props || {}; }
+}
+
+class Component extends DCLogic {
+
+  renderVals(){ return {}; }
+
+  componentDidMount(){
+    this._alive = true;
+    // textos + datos de las 11 piezas (formato/ubicación + justificación)
+    this.PIEZAS = [
+      { n:'01', src:'piezas/pieza-01.png', tit:'Pase de abordar',      fmt:'Pieza de mano · vía pública aeroportuaria', desc:'El juego como un viaje sin retorno: ya tiene su pase de abordar.' },
+      { n:'02', src:'piezas/pieza-02.png', tit:'Billetera digital',    fmt:'App de billetera · interfaz mobile',        desc:'El dinero ya está a un solo toque de la apuesta.' },
+      { n:'03', src:'piezas/pieza-03.png', tit:'Camiseta de fútbol',   fmt:'Indumentaria deportiva',                    desc:'El fútbol, principal puerta de entrada a la apuesta juvenil.' },
+      { n:'04', src:'piezas/pieza-04.png', tit:'Valla LED de estadio', fmt:'Cartel perimetral · estadio',               desc:'El mensaje aparece justo donde se promociona apostar.' },
+      { n:'05', src:'piezas/pieza-05.png', tit:'Escalera de subte',    fmt:'Gráfica de piso · andén de subte',          desc:'Cada escalón, un paso más adentro del juego.' },
+      { n:'06', src:'piezas/pieza-06.png', tit:'Pantalla LED urbana',  fmt:'Pantalla gigante · centro de la ciudad',    desc:'La advertencia toma el lugar de la publicidad de apuestas.' },
+      // === pieza-07: intervención de piso en cruce peatonal (sin imagen cargada — placeholder) ===
+      { n:'07', src:'piezas/pieza-07.png', tit:'Intervención de piso', fmt:'Vinilo de piso · cruce peatonal',           desc:'El cruce como decisión: seguir de largo o frenar a tiempo.' },
+      { n:'08', src:'piezas/pieza-08.png', tit:'Mesa de café',         fmt:'Gráfica sobre mesa · bar',                  desc:'La apuesta se cuela en lo cotidiano, entre amigos y un café.' },
+      { n:'09', src:'piezas/pieza-09.png', tit:'Escalera mecánica',    fmt:'Gráfica · escalera mecánica de shopping',   desc:'Te dejás llevar, escalón tras escalón, sin darte cuenta.' },
+      { n:'10', src:'piezas/pieza-10.png', tit:'Banco de parada',      fmt:'Mobiliario urbano · parada de colectivo',   desc:'Mientras esperás, ellos ya están jugando.' },
+      { n:'11', src:'piezas/pieza-11.png', tit:'Packaging advertencia',fmt:'Packaging tipo advertencia sanitaria',      desc:'El juego compulsivo, tratado como lo que es: un riesgo para la salud.' },
+    ];
+
+    // estado compartido leído por el render loop
+    this.sc = { heroFade:1, invade:0, fieldVis:1, galReveal:0, galActive:false };
+    this.gal = { drag:0, vel:0, dragging:false, lastX:0, moved:0, idleUntil:0 };
+    this.mouse = { x:0, y:0, tx:0, ty:0 };
+    this.activeIdx = -1;
+    this.isMobile = window.matchMedia('(max-width:780px), (pointer:coarse)').matches;
+
+    // props (Tweaks)
+    this.pColor   = this.props.colorAcento ?? '#e11d2a';
+    this.pDensity = this.props.densidadObjetos ?? (this.isMobile ? 7 : 12);
+    this.pReflex  = this.props.reflejosGaleria ?? !this.isMobile;
+    this.pAuto    = this.props.autoRotacion ?? true;
+
+    this.fakeLoader();        // anima el % del loader mientras carga
+    this.waitForLibs(0);
+  }
+
+  componentWillUnmount(){
+    this._alive = false;
+    if(this._raf) cancelAnimationFrame(this._raf);
+    if(this.lenis) this.lenis.destroy();
+    if(window.ScrollTrigger) ScrollTrigger.getAll().forEach(t=>t.kill());
+    window.removeEventListener('resize', this._onResize);
+    window.removeEventListener('pointermove', this._onMove);
+    window.removeEventListener('pointerdown', this._onDown);
+    window.removeEventListener('pointerup', this._onUp);
+  }
+
+  /* ---------- loader % simulado ---------- */
+  fakeLoader(){
+    const bar = document.getElementById('yj-load-bar');
+    const pct = document.getElementById('yj-loader-pct');
+    let v = 0;
+    this._loadInt = setInterval(()=>{
+      v = Math.min(100, v + Math.random()*16 + 6);
+      if(bar) bar.style.width = v+'%';
+      if(pct) pct.textContent = 'CARGANDO '+Math.round(v)+'%';
+      if(v>=100) clearInterval(this._loadInt);
+    }, 130);
+  }
+
+  hideLoader(){
+    const l = document.getElementById('yj-loader');
+    if(!l || l.dataset.hidden) return;
+    l.dataset.hidden = '1';
+    l.style.transition = 'opacity .6s ease';
+    requestAnimationFrame(()=>{ l.style.opacity = '0'; });
+    setTimeout(()=>{ l.style.display = 'none'; }, 760);
+  }
+
+  /* ---------- esperar a las CDN (three/lenis) ---------- */
+  waitForLibs(tries){
+    if(!this._alive) return;
+    // THREE es imprescindible; a Lenis le damos ~1.4s de gracia (si no, scroll nativo)
+    const ready = window.THREE && (window.Lenis || tries > 22);
+    if(ready){ try{ this.init(); }catch(e){ console.error('YJ init error', e); this.hideLoader(); } return; }
+    if(tries > 140){ this.hideLoader(); return; } // timeout ~9s → degradar a HTML
+    setTimeout(()=>this.waitForLibs(tries+1), 65);
+  }
+
+  /* ================================================================
+     INIT — escena, objetos, scroll, loop
+     ================================================================ */
+  init(){
+    const THREE = window.THREE;
+    const canvas = document.getElementById('yj-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:!this.isMobile, alpha:true, powerPreference:'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isMobile?1.5:2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer = renderer;
+
+    const scene = new THREE.Scene();
+    this.scene = scene;
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 12);
+    this.camera = camera;
+
+    // luces
+    scene.add(new THREE.AmbientLight(0x4a5366, 1.0));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.85); dir.position.set(5,8,6); scene.add(dir);
+    const rim = new THREE.DirectionalLight(0x6f8bd6, 0.4); rim.position.set(-6,-3,4); scene.add(rim);
+    this.redLight = new THREE.PointLight(new THREE.Color(this.pColor), 0.9, 26); this.redLight.position.set(0,-3,5); scene.add(this.redLight);
+
+    this.buildField();      // fichas y naipes flotando
+    this.buildRoulette();   // esfera de luz roja (ruleta)
+    this.buildGallery();    // carrusel orbital de las 11 piezas
+
+    this.setActive(0);
+
+    // eventos
+    this._onResize = ()=>this.onResize();
+    this._onMove = (e)=>this.onMove(e);
+    this._onDown = (e)=>this.onDown(e);
+    this._onUp = (e)=>this.onUp(e);
+    window.addEventListener('resize', this._onResize);
+    window.addEventListener('pointermove', this._onMove, {passive:true});
+    window.addEventListener('pointerdown', this._onDown, {passive:true});
+    window.addEventListener('pointerup', this._onUp, {passive:true});
+
+    document.getElementById('yj-prev').addEventListener('click', ()=>this.step(+1));
+    document.getElementById('yj-next').addEventListener('click', ()=>this.step(-1));
+
+    this.setupScroll();
+
+    this.clock = new THREE.Clock();
+    this.animate();
+    this.hideLoader();
+  }
+
+  /* ---------- texturas dibujadas en canvas ---------- */
+  makeTex(w,h,draw){
+    const c = document.createElement('canvas'); c.width=w; c.height=h;
+    draw(c.getContext('2d'), w, h);
+    const t = new window.THREE.CanvasTexture(c);
+    t.anisotropy = 4; t.needsUpdate = true; return t;
+  }
+  chipFace(base, ring, suit, suitCol){
+    return this.makeTex(256,256,(g,w,h)=>{
+      const cx=w/2, cy=h/2;
+      g.fillStyle=base; g.beginPath(); g.arc(cx,cy,124,0,7); g.fill();
+      // sectores del borde
+      g.fillStyle=ring;
+      for(let i=0;i<12;i++){ const a=i*Math.PI/6; g.save(); g.translate(cx,cy); g.rotate(a); g.fillRect(-15,-124,30,30); g.restore(); }
+      g.fillStyle=base; g.beginPath(); g.arc(cx,cy,96,0,7); g.fill();
+      g.strokeStyle=ring; g.lineWidth=5; g.beginPath(); g.arc(cx,cy,84,0,7); g.stroke();
+      g.fillStyle=suitCol; g.font='bold 110px Georgia, serif'; g.textAlign='center'; g.textBaseline='middle';
+      g.fillText(suit, cx, cy+6);
+    });
+  }
+  chipEdge(base){
+    const t = this.makeTex(64,16,(g,w,h)=>{
+      g.fillStyle=base; g.fillRect(0,0,w,h);
+      g.fillStyle='rgba(255,255,255,.85)';
+      for(let i=0;i<8;i++){ g.fillRect(i*8,0,4,h); }
+    });
+    t.wrapS = window.THREE.RepeatWrapping; t.repeat.set(8,1); return t;
+  }
+  cardFace(rank, suit, red){
+    return this.makeTex(230,322,(g,w,h)=>{
+      g.fillStyle='#f6f5f0'; g.fillRect(0,0,w,h);
+      g.strokeStyle='rgba(0,0,0,.12)'; g.lineWidth=4; g.strokeRect(6,6,w-12,h-12);
+      const col = red ? '#c01b1b' : '#15171c';
+      g.fillStyle=col; g.textAlign='center'; g.textBaseline='middle';
+      g.font='bold 50px Georgia, serif'; g.fillText(rank, 34, 44);
+      g.font='40px Georgia, serif'; g.fillText(suit, 34, 86);
+      g.save(); g.translate(w-34,h-44); g.rotate(Math.PI);
+      g.font='bold 50px Georgia, serif'; g.fillText(rank, 0, 0);
+      g.font='40px Georgia, serif'; g.fillText(suit, 0, 42); g.restore();
+      g.font='150px Georgia, serif'; g.fillText(suit, w/2, h/2+8);
+    });
+  }
+  cardBack(){
+    return this.makeTex(230,322,(g,w,h)=>{
+      g.fillStyle='#16203a'; g.fillRect(0,0,w,h);
+      g.strokeStyle='#e11d2a'; g.lineWidth=3; g.strokeRect(12,12,w-24,h-24);
+      g.strokeStyle='rgba(255,255,255,.12)'; g.lineWidth=2;
+      for(let i=-h;i<w;i+=16){ g.beginPath(); g.moveTo(i,0); g.lineTo(i+h,h); g.stroke(); }
+      g.fillStyle='#e11d2a'; g.beginPath(); g.arc(w/2,h/2,26,0,7); g.fill();
+      g.fillStyle='#f6f5f0'; g.font='bold 26px Georgia,serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('♠',w/2,h/2+2);
+    });
+  }
+  placeholderTex(p){
+    return this.makeTex(900,1130,(g,w,h)=>{
+      g.fillStyle='#0d1018'; g.fillRect(0,0,w,h);
+      g.save(); g.beginPath(); g.rect(0,0,w,h); g.clip();
+      g.strokeStyle='rgba(225,29,42,.32)'; g.lineWidth=44;
+      for(let i=-h;i<w;i+=120){ g.beginPath(); g.moveTo(i,0); g.lineTo(i+h,h); g.stroke(); }
+      g.restore();
+      g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=4; g.strokeRect(40,40,w-80,h-80);
+      g.fillStyle='#e11d2a'; g.font='bold 70px Anton, Arial'; g.textAlign='center';
+      g.fillText('PIEZA '+p.n, w/2, h*0.46);
+      g.fillStyle='#cfd2d8'; g.font='600 40px Arial'; g.fillText(p.tit, w/2, h*0.53);
+      g.fillStyle='#7c828d'; g.font='28px monospace'; g.fillText('piezas/pieza-'+p.n+'.png', w/2, h*0.60);
+    });
+  }
+
+  /* ---------- campo de fichas y naipes ---------- */
+  buildField(){
+    const THREE = window.THREE;
+    this.field = new THREE.Group(); this.scene.add(this.field);
+    const palette = [
+      ['#e11d2a','#ffffff','♥','#7a0f14'],
+      ['#16203a','#5b76b8','♠','#0a1124'],
+      ['#f3f3f0','#c9c9c4','♦','#b01818'],
+      ['#15171c','#4a505c','♣','#e6e6e2'],
+    ];
+    const nChips = this.pDensity;
+    const nCards = Math.round(this.pDensity*0.7);
+    const faces = palette.map(p=>({ face:this.chipFace(p[0],p[1],p[2],p[3]), edge:this.chipEdge(p[0]) }));
+    // fichas (cilindros)
+    for(let i=0;i<nChips;i++){
+      const f = faces[i%faces.length];
+      const geo = new THREE.CylinderGeometry(0.85,0.85,0.16,42);
+      const mats = [
+        new THREE.MeshStandardMaterial({ map:f.edge, roughness:.55, metalness:.1, transparent:true }),
+        new THREE.MeshStandardMaterial({ map:f.face, roughness:.5, metalness:.12, transparent:true }),
+        new THREE.MeshStandardMaterial({ map:f.face, roughness:.5, metalness:.12, transparent:true }),
+      ];
+      const m = new THREE.Mesh(geo, mats);
+      m.rotation.x = Math.PI/2;
+      this.placeFieldObj(m, i, nChips+nCards);
+      this.field.add(m);
+    }
+    // naipes (cajas finas)
+    const back = this.cardBack();
+    const ranks = [['A','♠',false],['K','♥',true],['Q','♦',true],['J','♣',false],['10','♥',true],['A','♦',true],['K','♠',false],['Q','♣',false],['J','♥',true]];
+    for(let i=0;i<nCards;i++){
+      const r = ranks[i%ranks.length];
+      const face = this.cardFace(r[0],r[1],r[2]);
+      const white = new THREE.MeshStandardMaterial({ color:0xf2f1ec, roughness:.7, transparent:true });
+      const geo = new THREE.BoxGeometry(1.0,1.4,0.03);
+      const mats = [white.clone(),white.clone(),white.clone(),white.clone(),
+        new THREE.MeshStandardMaterial({ map:face, roughness:.6, transparent:true }),
+        new THREE.MeshStandardMaterial({ map:back, roughness:.6, transparent:true })];
+      const m = new THREE.Mesh(geo, mats);
+      this.placeFieldObj(m, nChips+i, nChips+nCards);
+      this.field.add(m);
+    }
+    this.fieldMats = [];
+    this.field.traverse(o=>{ if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(mt=>this.fieldMats.push(mt)); } });
+  }
+  placeFieldObj(m, i, total){
+    const ang = (i/total)*Math.PI*2 + Math.random();
+    const rad = 4.4 + Math.random()*5.0;
+    m.position.set(Math.cos(ang)*rad*0.9, (Math.random()-0.5)*9, -2 + Math.random()*5 - (Math.random()*4));
+    m.rotation.x += (Math.random()-0.5)*2; m.rotation.y += (Math.random()-0.5)*2; m.rotation.z += (Math.random()-0.5)*2;
+    m.userData = {
+      base: m.position.clone(),
+      spin: new window.THREE.Vector3((Math.random()-0.5)*0.5,(Math.random()-0.5)*0.6,(Math.random()-0.5)*0.4),
+      bob: 0.25+Math.random()*0.5, speed: 0.3+Math.random()*0.6, phase: Math.random()*7,
+    };
+  }
+
+  /* ---------- esfera de luz roja (ruleta) ---------- */
+  buildRoulette(){
+    const THREE = window.THREE;
+    this.roulette = new THREE.Group();
+    const col = new THREE.Color(this.pColor);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.18,24,24), new THREE.MeshBasicMaterial({ color:0xffffff }));
+    // glow sprite
+    const glow = this.makeTex(128,128,(g,w,h)=>{
+      const grd=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
+      grd.addColorStop(0,'rgba(255,80,90,.95)'); grd.addColorStop(.4,'rgba(225,29,42,.5)'); grd.addColorStop(1,'rgba(225,29,42,0)');
+      g.fillStyle=grd; g.fillRect(0,0,w,h);
+    });
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map:glow, color:col, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+    spr.scale.set(2.4,2.4,1);
+    this.roulette.add(spr); this.roulette.add(ball);
+    this.roulette.position.set(0,-2.4,2.2);
+    this.scene.add(this.roulette);
+  }
+
+  /* ---------- carrusel orbital de piezas ---------- */
+  buildGallery(){
+    const THREE = window.THREE;
+    this.gallery = new THREE.Group();
+    this.gallery.position.set(0,0,0);
+    this.gallery.visible = false;
+    this.scene.add(this.gallery);
+    this.planes = [];
+    this.R = this.isMobile ? 5.0 : 6.2;
+    this.step2 = (Math.PI*2)/this.PIEZAS.length;
+    const loader = new THREE.TextureLoader();
+
+    this.PIEZAS.forEach((p, i)=>{
+      const ang = i*this.step2;
+      const grp = new THREE.Group();
+      grp.position.set(Math.sin(ang)*this.R, 0, Math.cos(ang)*this.R);
+      grp.rotation.y = ang;
+
+      const H = 3.4;
+      const mat = new THREE.MeshStandardMaterial({ color:0x1a1f2b, roughness:.85, metalness:.05, side:THREE.DoubleSide, transparent:true });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(H*0.72, H), mat);
+      grp.add(mesh);
+      // marco fino
+      const frame = new THREE.Mesh(new THREE.PlaneGeometry(H*0.72+0.12, H+0.12), new THREE.MeshBasicMaterial({ color:0x05070c, transparent:true }));
+      frame.position.z = -0.02; grp.add(frame);
+
+      let mirror = null;
+      if(this.pReflex){
+        mirror = new THREE.Mesh(new THREE.PlaneGeometry(H*0.72, H), mat.clone());
+        mirror.material.opacity = 0.16; mirror.scale.y = -1; mirror.position.y = -(H+0.18);
+        grp.add(mirror);
+      }
+
+      // ancho máximo permitido = espacio disponible entre piezas vecinas en el anillo
+      // (así las piezas apaisadas —4, 5, 6— no se pisan al rotar)
+      const maxW = this.R * this.step2 * 0.84;
+      // carga lazy de la textura (o placeholder si falta)
+      const apply = (tex)=>{
+        tex.anisotropy = 6;
+        const ar = (tex.image && tex.image.width) ? tex.image.width/tex.image.height : 0.72;
+        let w = H*ar, h = H;
+        if(w > maxW){ const k = maxW/w; w = maxW; h = H*k; } // achica manteniendo proporción
+        mesh.geometry.dispose(); mesh.geometry = new THREE.PlaneGeometry(w, h);
+        frame.geometry.dispose(); frame.geometry = new THREE.PlaneGeometry(w+0.12, h+0.12);
+        mat.map = tex; mat.color.set(0xffffff); mat.needsUpdate = true;
+        if(mirror){ mirror.geometry.dispose(); mirror.geometry = new THREE.PlaneGeometry(w,h); mirror.position.y = -(h+0.18); mirror.material.map = tex; mirror.material.color.set(0xffffff); mirror.material.needsUpdate = true; }
+      };
+      loader.load(p.src, apply, undefined, ()=>apply(this.placeholderTex(p)));
+
+      grp.userData = { i, mesh, base:H };
+      this.planes.push(grp);
+      this.gallery.add(grp);
+    });
+  }
+
+  /* ---------- navegación galería ---------- */
+  step(dir){ // dir +1 = anterior, -1 = siguiente (sentido visual)
+    this.gal.idleUntil = performance.now()+2600;
+    const base = (this.gal.snapping && this.gal.snapTo!=null) ? this.gal.snapTo : Math.round(this.gal.drag/this.step2)*this.step2;
+    this.gal.snapTo = base + dir*this.step2;
+    this.gal.snapping = true;
+  }
+  setActive(i){
+    i = ((i % this.PIEZAS.length)+this.PIEZAS.length) % this.PIEZAS.length;
+    if(i === this.activeIdx) return;
+    this.activeIdx = i;
+    const p = this.PIEZAS[i];
+    const set = (id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
+    set('yj-pieza-num', p.n); set('yj-pieza-tit', p.tit); set('yj-pieza-fmt', p.fmt); set('yj-pieza-desc', p.desc);
+    set('yj-pieza-index', p.n+' / 11');
+    // micro-animación de entrada (CSS, sin libs)
+    ['yj-pieza-num','yj-pieza-tit','yj-pieza-fmt','yj-pieza-desc'].forEach(id=>{
+      const el = document.getElementById(id); if(!el) return;
+      el.style.transition='none'; el.style.opacity='0'; el.style.transform='translateY(10px)';
+      void el.offsetWidth; // reflow
+      el.style.transition='opacity .45s ease, transform .45s ease'; el.style.opacity='1'; el.style.transform='none';
+    });
+  }
+
+  /* ---------- eventos puntero ---------- */
+  onMove(e){
+    const nx = (e.clientX/window.innerWidth)*2-1;
+    const ny = (e.clientY/window.innerHeight)*2-1;
+    this.mouse.tx = nx; this.mouse.ty = ny;
+    if(this.gal.dragging){
+      const dx = e.clientX - this.gal.lastX;
+      this.gal.drag += dx*0.006;
+      this.gal.vel = dx*0.006;
+      this.gal.lastX = e.clientX;
+      this.gal.moved += Math.abs(dx);
+    }
+  }
+  onDown(e){
+    if(!this.sc.galActive) return;
+    if(e.target.closest('button,a')) return;
+    this.gal.dragging = true; this.gal.lastX = e.clientX; this.gal.moved = 0; this.gal.vel = 0;
+    this.gal.snapping = false;
+    this.gal.idleUntil = performance.now()+3000;
+  }
+  onUp(){
+    if(this.gal.dragging){
+      this.gal.dragging = false;
+      // si fue un tap (poco movimiento) acomodamos a la pieza más cercana
+      if(this.gal.moved < 6){ this.gal.drag = Math.round(this.gal.drag/this.step2)*this.step2; }
+    }
+  }
+  onResize(){
+    if(!this.renderer) return;
+    this.camera.aspect = window.innerWidth/window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  /* ---------- scroll: Lenis (smooth) + métricas; todo lo demás se calcula en el loop ---------- */
+  setupScroll(){
+    // smooth-scroll opcional; si Lenis no cargó, el scroll nativo sigue funcionando
+    try{ if(window.Lenis){ this.lenis = new window.Lenis({ lerp:this.isMobile?0.12:0.085, smoothWheel:true, wheelMultiplier:0.95 }); } }
+    catch(e){ this.lenis = null; }
+
+    this.computeMetrics();
+    window.addEventListener('resize', ()=>this.computeMetrics());
+    setTimeout(()=>this.computeMetrics(), 500);
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>this.computeMetrics());
+
+    // contadores (se animan en el loop al entrar en viewport)
+    this.stats = [...document.querySelectorAll('.yj-stat')].map(el=>({
+      el, to:parseFloat(el.dataset.to), pre:el.dataset.pre||'', suf:el.dataset.suf||'', cur:0, on:false
+    }));
+    const sio = new IntersectionObserver((ents)=>{ ents.forEach(en=>{
+      const s = this.stats.find(x=>x.el===en.target); if(en.isIntersecting && s){ s.on=true; sio.unobserve(en.target); }
+    }); }, { threshold:0.6 });
+    this.stats.forEach(s=>sio.observe(s.el));
+
+    // revelado de listas (alertas) — sólo CSS, sin rAF
+    const rio = new IntersectionObserver((ents)=>{ ents.forEach(en=>{
+      if(en.isIntersecting){ en.target.style.opacity='1'; en.target.style.transform='none'; rio.unobserve(en.target); }
+    }); }, { threshold:0.2 });
+    document.querySelectorAll('.yj-alert').forEach((el,i)=>{
+      el.style.opacity='0'; el.style.transform='translateX(-18px)';
+      el.style.transition='opacity .55s ease '+(i%5*0.05)+'s, transform .55s ease '+(i%5*0.05)+'s';
+      rio.observe(el);
+    });
+  }
+
+  /* posiciones absolutas de las secciones (recalculado en resize / carga de fuentes) */
+  computeMetrics(){
+    const abs = (id)=>{ const el=document.getElementById(id); if(!el) return {top:0,h:0}; const r=el.getBoundingClientRect(); return { top:r.top+window.scrollY, h:el.offsetHeight }; };
+    this.M = { hero:abs('yj-hero'), doble:abs('yj-doble'), galeria:abs('yj-galeria'), accion:abs('yj-accion') };
+    this.docMax = Math.max(1, document.body.scrollHeight - window.innerHeight);
+    this._jp = document.getElementById('yj-word-jugar');
+    this._ap = document.getElementById('yj-word-apostar');
+    this._bar = document.getElementById('yj-bar');
+  }
+
+  /* ================================================================
+     RENDER LOOP
+     ================================================================ */
+  animate(){
+    if(!this._alive) return;
+    this._raf = requestAnimationFrame(()=>this.animate());
+    const THREE = window.THREE;
+    const t = this.clock.getElapsedTime();
+    const dt = Math.min(this.clock.getDelta(), 0.05);
+    if(this.lenis) this.lenis.raf(performance.now());
+
+    // ===== estados scroll-driven (calculados desde window.scrollY) =====
+    const y = window.scrollY, vh = window.innerHeight, M = this.M || {};
+    const cl = (v)=> v<0?0 : v>1?1 : v;
+    if(this._bar) this._bar.style.width = (cl(y/this.docMax)*100)+'%';
+    // hero
+    this.sc.heroFade = cl(1 - y/(vh*0.9));
+    // doble sentido: invasión + morph de palabra
+    if(M.doble){
+      const p = cl((y - M.doble.top)/Math.max(1, (M.doble.h - vh)));
+      this.sc.invade = p;
+      if(this._jp){ this._jp.style.opacity = (1-Math.min(1,p*1.7)); this._jp.style.transform = 'scale('+(1-p*0.12)+')'; }
+      if(this._ap){ const q = Math.max(0,(p-0.32)/0.5); this._ap.style.opacity = q; this._ap.style.transform = 'scale('+(1.08-q*0.08)+')'; }
+    }
+    // galería: reveal, foco y desvanecido del campo
+    if(M.galeria){
+      const g = M.galeria, galEnd = g.top + g.h - vh;
+      this.sc.galReveal = cl((y - (g.top - vh*0.7))/(vh*0.55));
+      this.sc.galActive = (y > g.top - vh*0.45) && (y < galEnd + vh*0.4);
+      if(y < g.top) this.sc.fieldVis = 1 - this.sc.galReveal;
+      else if(y < galEnd) this.sc.fieldVis = 0;
+      else this.sc.fieldVis = cl((y - galEnd)/(vh*0.6));
+    }
+    // contadores
+    if(this.stats){ this.stats.forEach(s=>{ if(s.on){ s.cur += (s.to-s.cur)*0.08; if(Math.abs(s.to-s.cur)<0.4) s.cur=s.to; s.el.textContent = s.pre+Math.round(s.cur)+s.suf; } }); }
+
+    // parallax mouse suavizado
+    this.mouse.x += (this.mouse.tx - this.mouse.x)*0.05;
+    this.mouse.y += (this.mouse.ty - this.mouse.y)*0.05;
+    this.camera.position.x += ((this.mouse.x*1.1) - this.camera.position.x)*0.04;
+    this.camera.position.y += ((-this.mouse.y*0.8) - this.camera.position.y)*0.04;
+    this.camera.lookAt(0,0,0);
+
+    // ---- campo de fichas/naipes ----
+    const vis = THREE.MathUtils.clamp(this.sc.fieldVis, 0, 1);
+    const inv = this.sc.invade;
+    this.field.visible = vis > 0.02;
+    if(this.field.visible){
+      this.field.rotation.y = Math.sin(t*0.05)*0.1 + this.mouse.x*0.06;
+      this.field.children.forEach((m)=>{
+        const u = m.userData;
+        m.position.x = u.base.x;
+        m.position.y = u.base.y + Math.sin(t*u.speed + u.phase)*u.bob;
+        m.position.z = u.base.z + inv*2.2; // "invaden" acercándose
+        const sp = 1 + inv*2.2;
+        m.rotation.x += u.spin.x*dt*sp; m.rotation.y += u.spin.y*dt*sp; m.rotation.z += u.spin.z*dt*sp;
+      });
+      const op = vis * (0.5 + inv*0.5);
+      this.fieldMats.forEach(mt=>{ mt.opacity = op; });
+    }
+
+    // ---- ruleta ----
+    const hf = this.sc.heroFade;
+    this.roulette.visible = hf > 0.03;
+    if(this.roulette.visible){
+      this.roulette.position.x = Math.sin(t*0.9)*3.6;
+      this.roulette.position.y = -2.4 + Math.cos(t*0.45)*0.25;
+      this.roulette.children.forEach(c=>{ if(c.material) c.material.opacity = hf; });
+      this.redLight.position.x = this.roulette.position.x;
+      this.redLight.intensity = 0.5 + hf*0.6 + inv*0.5;
+    } else { this.redLight.intensity = 0.4 + inv*0.7; }
+
+    // ---- galería ----
+    const gr = THREE.MathUtils.clamp(this.sc.galReveal,0,1);
+    this.gallery.visible = gr > 0.02;
+    if(this.gallery.visible){
+      if(this.gal.snapping){
+        // animación de los botones ‹ ›
+        this.gal.drag += (this.gal.snapTo - this.gal.drag)*0.16;
+        if(Math.abs(this.gal.snapTo - this.gal.drag) < 0.002){ this.gal.drag = this.gal.snapTo; this.gal.snapping = false; }
+      } else {
+        // auto-rotación lenta (si no hay interacción reciente)
+        if(this.pAuto && this.sc.galActive && !this.gal.dragging && performance.now()>this.gal.idleUntil){
+          this.gal.drag -= dt*0.11;
+        }
+        // inercia tras arrastrar
+        if(!this.gal.dragging){ this.gal.drag += this.gal.vel; this.gal.vel *= 0.92; }
+      }
+      this.gallery.rotation.y = this.gal.drag + Math.sin(t*0.25)*0.012;
+      // reveal: escala + acercar
+      const e = gr*gr*(3-2*gr); // smoothstep
+      this.gallery.scale.setScalar(0.6 + e*0.4);
+      this.gallery.position.z = -4 + e*4;
+      // pieza activa = la del frente
+      const front = Math.round(-this.gal.drag/this.step2);
+      this.setActive(front);
+      // resaltar la del frente (escala suave de cada plano)
+      this.planes.forEach((g)=>{
+        let d = Math.abs(((g.userData.i - front) % this.PIEZAS.length));
+        d = Math.min(d, this.PIEZAS.length-d);
+        const target = d===0 ? 1.12 : 0.9;
+        g.scale.x += (target - g.scale.x)*0.12; g.scale.y = g.scale.x;
+        const mat = g.userData.mesh.material;
+        mat.opacity = (d<=2 ? 1 : 0.5) * (0.4+e*0.6);
+        mat.emissive && mat.emissive.setScalar(d===0?0.06:0);
+      });
+    }
+
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+/* ---- bootstrap: props por defecto del componente + montaje al cargar ---- */
+const PROPS = { colorAcento:'#e11d2a', densidadObjetos:12, reflejosGaleria:true, autoRotacion:true };
+const __yj = new Component(PROPS);
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', ()=>__yj.componentDidMount());
+} else {
+  __yj.componentDidMount();
+}
+</script>
+</body>
+</html>
